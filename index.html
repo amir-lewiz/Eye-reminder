@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
+<title>Eye Reminder</title>
+<style>
+:root{--bg:#0d1117;--card:#161b22;--line:#30363d;--txt:#e6edf3;--mut:#8b949e;--acc:#58a6ff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:Tahoma,'Segoe UI',Arial,sans-serif;padding:18px}
+h1{font-size:1.4rem;margin:0}.head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.head button{padding:5px 12px}
+.hero{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;text-align:center;margin-bottom:12px}
+.big{font-size:2.3rem;font-weight:700;letter-spacing:2px;direction:ltr;color:var(--acc)}
+.mut{color:var(--mut);font-size:.85rem}
+.row{display:flex;gap:8px;justify-content:center;margin-top:10px}
+button{font:inherit;background:var(--acc);color:#0d1117;border:0;border-radius:9px;padding:8px 16px;font-weight:700;cursor:pointer}
+button.ghost{background:transparent;color:var(--txt);border:1px solid var(--line)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 4px;text-align:center}
+.stat b{display:block;font-size:1.3rem;color:var(--acc)}
+.stat span{font-size:.72rem;color:var(--mut)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px}
+.top{display:flex;align-items:center;gap:10px}
+.ico{font-size:1.6rem}
+.t{flex:1}.t b{display:block}.t small{color:var(--mut)}
+.time{font-size:1.2rem;font-weight:700;direction:ltr}
+.bar{height:5px;background:var(--line);border-radius:5px;margin:10px 0;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--acc);width:0;transition:width .5s linear}
+.ctl{display:flex;align-items:center;gap:8px;color:var(--mut);font-size:.85rem}
+.ctl button{padding:5px 12px}
+.ctl label{margin-inline-start:auto;cursor:pointer}
+input[type=number]{width:60px;background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:7px;padding:4px;font:inherit}
+#alert{position:fixed;inset:0;background:#000b;display:none;align-items:center;justify-content:center;padding:20px}
+#alert.on{display:flex}
+#alert div{background:var(--card);border:1px solid var(--acc);border-radius:16px;padding:24px;text-align:center}
+#alert .ico{font-size:3rem}
+</style>
+</head>
+<body>
+<div class="head"><h1>👀 <span id="appName"></span></h1><button class="ghost" id="langBtn"></button></div>
+<section class="hero">
+  <div class="mut" id="lblSession"></div>
+  <div class="big" id="elapsed">00:00:00</div>
+  <div class="row"><button id="toggle"></button><button class="ghost" id="reset"></button></div>
+</section>
+
+<div class="mut" style="margin-bottom:6px" id="lblToday"></div>
+<div class="stats" id="stats"></div>
+<div id="list"></div>
+
+<div id="alert"><div>
+  <div class="ico" id="aIco"></div>
+  <h2 id="aTitle"></h2>
+  <p id="aMsg" class="mut"></p>
+  <button id="aOk"></button>
+  <button class="ghost" id="aLater"></button>
+</div></div>
+
+<script>
+const DEFAULTS=[
+ {id:'rule',ico:'🔭',min:20},
+ {id:'break',ico:'🧘',min:60},
+ {id:'water',ico:'💧',min:45},
+ {id:'eye',ico:'👁️',min:120}
+];
+const I18N={
+ar:{app:'عينك عليك',other:'English',session:'مدة الاستخدام في هذه الجلسة',start:'▶ ابدأ',pause:'⏸ إيقاف مؤقت',reset:'إعادة ضبط',today:'إنجازات اليوم',every:'كل',minutes:'دقيقة',done:'تم ✓',later:'لاحقًا',on:'مفعّل',
+ rule:{t:'قاعدة 20-20-20',d:'انظر لشيء بعيد 20 ثانية',msg:'انظر إلى شيء يبعد نحو 6 أمتار لمدة 20 ثانية.',stat:'نظرات'},
+ break:{t:'استراحة من الشاشة',d:'قم وتحرّك ومدّ جسمك',msg:'مرّ وقت طويل على الشاشة. قم واستريح 5 دقائق.',stat:'استراحات'},
+ water:{t:'اشرب ماء',d:'حافظ على ترطيب جسمك',msg:'حان وقت كوب من الماء.',stat:'أكواب'},
+ eye:{t:'قطرة مرطب للعين',d:'وقاية من جفاف العين',msg:'ضع قطرة المرطب في عينيك.',stat:'قطرات'}},
+en:{app:'Eye Reminder',other:'العربية',session:'Screen time this session',start:'▶ Start',pause:'⏸ Pause',reset:'Reset',today:"Today's progress",every:'Every',minutes:'min',done:'Done ✓',later:'Later',on:'Enabled',
+ rule:{t:'20-20-20 rule',d:'Look 20 ft away for 20 seconds',msg:'Look at something about 6 meters (20 ft) away for 20 seconds.',stat:'Eye breaks'},
+ break:{t:'Screen break',d:'Stand up and stretch',msg:"You've been on screen for a while. Take a 5-minute break.",stat:'Breaks'},
+ water:{t:'Drink water',d:'Stay hydrated',msg:'Time for a glass of water.',stat:'Glasses'},
+ eye:{t:'Eye drops',d:'Prevent dry eyes',msg:'Time to put in your lubricating eye drops.',stat:'Drops'}}
+};
+const KEY='eyeReminder.desktop.v1';
+const today=()=>new Date().toLocaleDateString('en-CA');
+let S={elapsed:0,items:{},stats:{date:today(),counts:{}},lang:(navigator.language||'').startsWith('ar')?'ar':'en'};
+try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r));}catch(e){}
+DEFAULTS.forEach(d=>{if(!S.items[d.id])S.items[d.id]={on:true,min:d.min,left:d.min*60};});
+let running=false,cur=null;
+const tr=()=>I18N[S.lang];
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}};
+const $=id=>document.getElementById(id);
+const pad=n=>String(n).padStart(2,'0');
+const fmt=s=>pad(Math.floor(s/3600))+':'+pad(Math.floor(s%3600/60))+':'+pad(s%60);
+const fmtS=s=>Math.floor(s/60)+':'+pad(s%60);
+
+function checkDay(){if(S.stats.date!==today())S.stats={date:today(),counts:{}};}
+function bump(id){checkDay();S.stats.counts[id]=(S.stats.counts[id]||0)+1;save();update();}
+function reset(id){S.items[id].left=S.items[id].min*60;}
+
+function render(){
+ $('stats').innerHTML=DEFAULTS.map(d=>`<div class="stat"><b id="s-${d.id}">0</b><span>${d.ico} ${tr()[d.id].stat}</span></div>`).join('');
+ $('list').innerHTML=DEFAULTS.map(d=>{const i=S.items[d.id];return `
+ <div class="card">
+  <div class="top"><span class="ico">${d.ico}</span>
+   <div class="t"><b>${tr()[d.id].t}</b><small>${tr()[d.id].d}</small></div>
+   <div class="time" id="t-${d.id}"></div></div>
+  <div class="bar"><i id="b-${d.id}"></i></div>
+  <div class="ctl">${tr().every} <input type="number" min="1" max="600" value="${i.min}" data-min="${d.id}"> ${tr().minutes}
+   <button class="ghost" data-done="${d.id}">${tr().done}</button>
+   <label><input type="checkbox" data-on="${d.id}" ${i.on?'checked':''}> ${tr().on}</label></div>
+ </div>`;}).join('');
+ update();
+}
+function update(){
+ checkDay();
+ $('elapsed').textContent=fmt(S.elapsed);
+ DEFAULTS.forEach(d=>{const i=S.items[d.id];
+  $('s-'+d.id).textContent=S.stats.counts[d.id]||0;
+  $('t-'+d.id).textContent=i.on?fmtS(i.left):'--';
+  $('b-'+d.id).style.width=(i.on?100-i.left/(i.min*60)*100:0)+'%';});
+}
+function beep(){try{const c=new AudioContext();[660,880].forEach((f,k)=>{const o=c.createOscillator(),g=c.createGain();
+ o.frequency.value=f;o.connect(g);g.connect(c.destination);const t=c.currentTime+k*.25;
+ g.gain.setValueAtTime(.15,t);g.gain.exponentialRampToValueAtTime(.001,t+.22);o.start(t);o.stop(t+.25);});}catch(e){}}
+function fire(d){
+ cur=d.id;
+ const x=tr()[d.id];$('aIco').textContent=d.ico;$('aTitle').textContent=x.t;$('aMsg').textContent=x.msg;
+ $('alert').classList.add('on');beep();
+ try{new Notification(x.t,{body:x.msg});}catch(e){}
+ window.api&&window.api.show(); // يُظهر النافذة إن كانت مخفية
+}
+setInterval(()=>{
+ if(!running)return;
+ S.elapsed++;
+ DEFAULTS.forEach(d=>{const i=S.items[d.id];if(!i.on)return;
+  if(--i.left<=0){fire(d);reset(d.id);}});
+ update();if(S.elapsed%10===0)save();
+},1000);
+
+const setToggle=()=>$('toggle').textContent=running?tr().pause:tr().start;
+$('toggle').onclick=()=>{running=!running;setToggle();};
+$('reset').onclick=()=>{S.elapsed=0;DEFAULTS.forEach(d=>reset(d.id));save();update();};
+$('aOk').onclick=()=>{$('alert').classList.remove('on');if(cur)bump(cur);};
+$('aLater').onclick=()=>$('alert').classList.remove('on');
+$('list').addEventListener('change',e=>{
+ const m=e.target.dataset.min,o=e.target.dataset.on;
+ if(m){const v=Math.max(1,parseInt(e.target.value)||1);S.items[m].min=v;reset(m);}
+ if(o)S.items[o].on=e.target.checked;
+ save();update();});
+$('list').addEventListener('click',e=>{const d=e.target.dataset.done;
+ if(d){reset(d);bump(d);}});
+window.addEventListener('beforeunload',save);
+function applyLang(){
+ const L=S.lang,T=tr();
+ document.documentElement.lang=L;document.documentElement.dir=L==='ar'?'rtl':'ltr';
+ document.title=T.app;
+ $('appName').textContent=T.app;$('langBtn').textContent=T.other;
+ $('lblSession').textContent=T.session;$('reset').textContent=T.reset;
+ $('lblToday').textContent=T.today;$('aOk').textContent=T.done;$('aLater').textContent=T.later;
+ setToggle();render();
+ window.api&&window.api.setLang(L);
+}
+$('langBtn').onclick=()=>{S.lang=S.lang==='ar'?'en':'ar';save();applyLang();};
+applyLang();
+</script>
+</body>
+</html>
